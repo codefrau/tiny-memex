@@ -10,6 +10,7 @@
 
 // Modified for Dual Displays in Tiny Memex by Vanessa Freudenberg (codefrau)
 
+#include <signal.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -199,7 +200,22 @@ static void writeCommand(uint8_t c) {
 
 // MAIN CODE ---------------------------------------------------------------
 
+int done = 0;
+
+void term(int signum)
+{
+   printf("Caught signal!\n");
+   done = 1;
+}
+
+
 int main(int argc, char *argv[]) {
+	struct sigaction action;
+	memset(&action, 0, sizeof(action));
+	action.sa_handler = term;
+	sigaction(SIGINT, &action, NULL);
+	sigaction(SIGQUIT, &action, NULL);
+	sigaction(SIGTERM, &action, NULL);
 
 	uint16_t pixelBuf[SRC_WIDTH * HEIGHT];   // 16-bit pixel buffer for downsampled source framebuffer
 	uint16_t leftBuf[LEFT_WIDTH * HEIGHT];   // 16-bit pixel buffer for left target framebuffer
@@ -407,7 +423,7 @@ int main(int argc, char *argv[]) {
 	struct timeval tv;
 	uint32_t       timeNow, timePrev = 0, timeDelta;
 
-	for(;;) {
+	while (!done) {
 		// Throttle transfer to approx FPS frames/sec.
 		// usleep() avoids heavy CPU load of time polling.
 		gettimeofday(&tv, NULL);
@@ -442,7 +458,7 @@ int main(int argc, char *argv[]) {
 			// select SPI to receive commands
 			fdSPI = fdSPIs[side];
 			dcMask = dcMasks[side];
-			
+
 			// Before pushing data to SPI screen, column and row
 			// ranges are reset every frame to force screen data
 			// pointer back to (0,0).  Though the pointer will
@@ -471,6 +487,16 @@ int main(int argc, char *argv[]) {
 			}
 		}
 	}
+
+	// turn off displays
+	for (side = LEFT; side <= RIGHT; side++) {
+		// select SPI to receive commands
+		fdSPI = fdSPIs[side];
+		dcMask = dcMasks[side];
+		// send commands
+		writeCommand(ILI9341_DISPOFF);
+	}
+
 
 	vc_dispmanx_resource_delete(screen_resource);
 	vc_dispmanx_display_close(display);
