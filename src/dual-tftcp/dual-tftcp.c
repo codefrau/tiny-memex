@@ -204,7 +204,6 @@ int done = 0;
 
 void term(int signum)
 {
-   printf("Caught signal!\n");
    done = 1;
 }
 
